@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload de fichiers</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+      background: #f0f2f5;
+      gap: 1.5rem;
+    }
+    h1 { font-size: 1.8rem; color: #333; }
+    #drop-zone {
+      width: 400px;
+      padding: 3rem 2rem;
+      border: 3px dashed #4a90e2;
+      border-radius: 12px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      color: #555;
+    }
+    #drop-zone.dragover {
+      background: #e8f0fe;
+      border-color: #1a73e8;
+    }
+    #drop-zone p { font-size: 1rem; margin-bottom: 0.5rem; }
+    #drop-zone span { font-size: 0.85rem; color: #888; }
+    #file-input { display: none; }
+    #status {
+      width: 400px;
+      font-size: 0.95rem;
+      color: #444;
+      min-height: 1.5rem;
+      text-align: center;
+    }
+    #file-list {
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .file-item {
+      background: #fff;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .file-item .name { color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+    .file-item .badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge.uploading { background: #fff3cd; color: #856404; }
+    .badge.success   { background: #d1e7dd; color: #0f5132; }
+    .badge.error     { background: #f8d7da; color: #842029; }
+  </style>
+</head>
+<body>
+  <h1>Upload vers S3</h1>
+
+  <div id="drop-zone">
+    <p>Glissez vos fichiers ici</p>
+    <span>ou cliquez pour parcourir</span>
+    <input type="file" id="file-input" multiple />
+  </div>
+
+  <div id="status"></div>
+  <div id="file-list"></div>
+
+  <script>
+    const BACKEND_URL = window.BACKEND_URL || "";
+
+    const dropZone  = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const status    = document.getElementById("status");
+    const fileList  = document.getElementById("file-list");
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      uploadFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener("change", () => uploadFiles(fileInput.files));
+
+    async function uploadFiles(files) {
+      if (!files.length) return;
+      status.textContent = `${files.length} fichier(s) en cours d'envoi…`;
+
+      const uploads = Array.from(files).map(file => uploadOne(file));
+      await Promise.all(uploads);
+      status.textContent = "Tous les envois sont terminés.";
+      fileInput.value = "";
+    }
+
+    async function uploadOne(file) {
+      const item = addItem(file.name, "uploading", "Envoi…");
+      const form = new FormData();
+      form.append("file", file);
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/upload`, { method: "POST", body: form });
+        const data = await res.json();
+        if (res.ok) {
+          setBadge(item, "success", "Envoyé ✓");
+        } else {
+          setBadge(item, "error", data.detail || "Erreur");
+        }
+      } catch (err) {
+        setBadge(item, "error", "Réseau KO");
+      }
+    }
+
+    function addItem(name, badgeClass, badgeText) {
+      const div = document.createElement("div");
+      div.className = "file-item";
+      div.innerHTML = `<span class="name" title="${name}">${name}</span><span class="badge ${badgeClass}">${badgeText}</span>`;
+      fileList.prepend(div);
+      return div;
+    }
+
+    function setBadge(item, badgeClass, text) {
+      const badge = item.querySelector(".badge");
+      badge.className = `badge ${badgeClass}`;
+      badge.textContent = text;
+    }
+  </script>
+</body>
+</html>
