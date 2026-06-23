@@ -6,7 +6,7 @@ resource "kubernetes_secret" "db_credentials" {
 
   data = {
     username             = "postgres"
-    password             = "monpassword"
+    password             = "MAUVAIS_MDP"
     dbname               = "postgres"
     aws_access_key_id     = var.aws_access_key_id
     aws_secret_access_key = var.aws_secret_access_key
