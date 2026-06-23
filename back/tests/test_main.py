@@ -56,6 +56,26 @@ def test_hello_special_chars(client):
 
 
 # ---------------------------------------------------------------------------
+# Readiness
+# ---------------------------------------------------------------------------
+
+def test_readiness_ok(client):
+    resp = client.get("/healthz/ready")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ready"}
+
+
+def test_readiness_db_down():
+    # Premier appel = startup (OK), deuxième = readiness check (KO)
+    with patch("main.get_db_conn", side_effect=[make_db_mock(), Exception("connection refused")]):
+        from main import app
+        with TestClient(app) as c:
+            resp = c.get("/healthz/ready")
+    assert resp.status_code == 503
+    assert "DB unreachable" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
 

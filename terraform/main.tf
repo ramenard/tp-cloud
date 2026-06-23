@@ -106,6 +106,18 @@ resource "kubernetes_deployment" "backend" {
               }
             }
           }
+
+          readiness_probe {
+            http_get {
+              path = "/healthz/ready"
+              port = 8080
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 10
+            failure_threshold     = 3
+            success_threshold     = 1
+            timeout_seconds       = 3
+          }
         }
       }
     }

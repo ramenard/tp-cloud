@@ -59,6 +59,17 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/healthz/ready")
+def readiness():
+    try:
+        with get_db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"DB unreachable: {exc}")
+    return {"status": "ready"}
+
+
 @app.get("/hello/{name}")
 def hello(name: str):
     return {"message": f"Bonjour {name} !"}
