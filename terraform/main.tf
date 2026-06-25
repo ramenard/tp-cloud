@@ -335,6 +335,97 @@ resource "kubernetes_deployment" "frontend" {
   }
 }
 
+# ─── Monitoring : Prometheus ───────────────────────────────────────────────────
+resource "kubernetes_config_map" "prometheus_config" {
+  metadata {
+    name = "prometheus-config"
+  }
+
+  data = {
+    "prometheus.yml" = <<-YAML
+      global:
+        scrape_interval: 15s
+
+      scrape_configs:
+        - job_name: auth-service
+          static_configs:
+            - targets: ["auth-service:8080"]
+
+        - job_name: core-service
+          static_configs:
+            - targets: ["core-service:8080"]
+    YAML
+  }
+}
+
+resource "kubernetes_deployment" "prometheus" {
+  metadata {
+    name   = "prometheus"
+    labels = { app = "prometheus" }
+  }
+
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = { app = "prometheus" }
+    }
+
+    template {
+      metadata {
+        labels = { app = "prometheus" }
+      }
+
+      spec {
+        container {
+          name  = "prometheus"
+          image = "prom/prometheus:v2.53.0"
+
+          args = [
+            "--config.file=/etc/prometheus/prometheus.yml",
+            "--storage.tsdb.path=/prometheus",
+          ]
+
+          port {
+            container_port = 9090
+          }
+
+          volume_mount {
+            name       = "config"
+            mount_path = "/etc/prometheus"
+          }
+        }
+
+        volume {
+          name = "config"
+          config_map {
+            name = kubernetes_config_map.prometheus_config.metadata[0].name
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "kubernetes_service" "prometheus" {
+  metadata {
+    name = "prometheus"
+  }
+
+  spec {
+    selector = { app = "prometheus" }
+
+    port {
+      port        = 9090
+      target_port = 9090
+      node_port   = 30090
+    }
+
+    type = "NodePort"
+  }
+}
+
+# ─── Frontend ──────────────────────────────────────────────────────────────────
 resource "kubernetes_service" "frontend" {
   metadata {
     name = "cloud-frontend-service"

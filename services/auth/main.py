@@ -6,6 +6,7 @@ import jwt
 import psycopg2
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 SECRET_KEY = os.getenv("JWT_SECRET", "changeme-in-production")
@@ -15,6 +16,8 @@ TOKEN_EXPIRE_HOURS = 24
 app = FastAPI(title="Auth Service")
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+Instrumentator().instrument(app).expose(app)
 
 
 def get_db_conn():
