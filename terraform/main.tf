@@ -1,449 +1,167 @@
 locals {
-  auth_image = var.image_registry != "" ? "${var.image_registry}/auth-service:${var.image_tag}" : "auth-service:latest"
-  core_image = var.image_registry != "" ? "${var.image_registry}/core-service:${var.image_tag}" : "core-service:latest"
-}
-
-# ─── Secrets ───────────────────────────────────────────────────────────────────
-resource "kubernetes_secret" "db_credentials" {
-  metadata {
-    name = "db-credentials"
-  }
-
-  data = {
-    username             = "postgres"
-    password             = "monpassword"
-    dbname               = "postgres"
-    aws_access_key_id    = var.aws_access_key_id
-    aws_secret_access_key = var.aws_secret_access_key
-    s3_bucket_name       = var.s3_bucket_name
-    jwt_secret           = var.jwt_secret
-  }
+  registry     = var.image_registry
+  tag          = var.image_tag
+  auth_image   = "${local.registry}/auth-service:${local.tag}"
+  core_image   = "${local.registry}/core-service:${local.tag}"
+  front_image  = "${local.registry}/frontend:${local.tag}"
+  alloy_image  = "${local.registry}/monitoring:${local.tag}"
 }
 
 # ─── Auth Service ──────────────────────────────────────────────────────────────
-resource "kubernetes_deployment" "auth" {
-  metadata {
-    name   = "auth-service"
-    labels = { app = "auth-service" }
+resource "google_cloud_run_v2_service" "auth" {
+  name     = "auth-service"
+  location = var.gcp_region
+
+  template {
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    containers {
+      image = local.auth_image
+
+      env { name = "DB_HOST";     value = var.db_host }
+      env { name = "DB_PORT";     value = var.db_port }
+      env { name = "DB_NAME";     value = var.db_name }
+      env { name = "DB_USER";     value = var.db_user }
+      env { name = "DB_PASSWORD"; value = var.db_password }
+      env { name = "JWT_SECRET";  value = var.jwt_secret }
+    }
   }
 
-  spec {
-    replicas = 1
+  traffic {
+    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    percent = 100
+  }
 
-    selector {
-      match_labels = { app = "auth-service" }
-    }
-
-    template {
-      metadata {
-        labels = { app = "auth-service" }
-      }
-
-      spec {
-        container {
-          name              = "api"
-          image             = local.auth_image
-          image_pull_policy = var.image_registry != "" ? "Always" : "Never"
-
-          port {
-            container_port = 8080
-          }
-
-          env {
-            name  = "DB_HOST"
-            value = "my-postgres-postgresql"
-          }
-          env {
-            name  = "DB_PORT"
-            value = "5432"
-          }
-          env {
-            name = "DB_USER"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "username"
-              }
-            }
-          }
-          env {
-            name = "DB_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "password"
-              }
-            }
-          }
-          env {
-            name = "DB_NAME"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "dbname"
-              }
-            }
-          }
-          env {
-            name = "JWT_SECRET"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "jwt_secret"
-              }
-            }
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/healthz/ready"
-              port = 8080
-            }
-            initial_delay_seconds = 5
-            period_seconds        = 10
-            failure_threshold     = 3
-            success_threshold     = 1
-            timeout_seconds       = 3
-          }
-        }
-      }
-    }
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
   }
 }
 
-resource "kubernetes_service" "auth" {
-  metadata {
-    name = "auth-service"
-  }
-
-  spec {
-    selector = { app = "auth-service" }
-
-    port {
-      port        = 8080
-      target_port = 8080
-      node_port   = 30082
-    }
-
-    type = "NodePort"
-  }
-}
-
-resource "kubernetes_horizontal_pod_autoscaler" "auth" {
-  metadata {
-    name = "auth-service-hpa"
-  }
-
-  spec {
-    scale_target_ref {
-      api_version = "apps/v1"
-      kind        = "Deployment"
-      name        = kubernetes_deployment.auth.metadata[0].name
-    }
-
-    min_replicas                      = 1
-    max_replicas                      = 5
-    target_cpu_utilization_percentage = 70
-  }
+resource "google_cloud_run_v2_service_iam_member" "auth_public" {
+  name     = google_cloud_run_v2_service.auth.name
+  location = var.gcp_region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # ─── Core Service ──────────────────────────────────────────────────────────────
-resource "kubernetes_deployment" "core" {
-  metadata {
-    name   = "core-service"
-    labels = { app = "core-service" }
+resource "google_cloud_run_v2_service" "core" {
+  name     = "core-service"
+  location = var.gcp_region
+
+  template {
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    containers {
+      image = local.core_image
+
+      env { name = "DB_HOST";               value = var.db_host }
+      env { name = "DB_PORT";               value = var.db_port }
+      env { name = "DB_NAME";               value = var.db_name }
+      env { name = "DB_USER";               value = var.db_user }
+      env { name = "DB_PASSWORD";           value = var.db_password }
+      env { name = "AWS_ACCESS_KEY_ID";     value = var.aws_access_key_id }
+      env { name = "AWS_SECRET_ACCESS_KEY"; value = var.aws_secret_access_key }
+      env { name = "S3_BUCKET_NAME";        value = var.s3_bucket_name }
+      env { name = "AWS_REGION";            value = var.aws_region }
+      env { name = "AUTH_SERVICE_URL";      value = "https://${google_cloud_run_v2_service.auth.uri}" }
+    }
   }
 
-  spec {
-    replicas = 1
+  traffic {
+    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    percent = 100
+  }
 
-    selector {
-      match_labels = { app = "core-service" }
-    }
-
-    template {
-      metadata {
-        labels = { app = "core-service" }
-      }
-
-      spec {
-        container {
-          name              = "api"
-          image             = local.core_image
-          image_pull_policy = var.image_registry != "" ? "Always" : "Never"
-
-          port {
-            container_port = 8080
-          }
-
-          env {
-            name  = "DB_HOST"
-            value = "my-postgres-postgresql"
-          }
-          env {
-            name  = "DB_PORT"
-            value = "5432"
-          }
-          env {
-            name = "DB_USER"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "username"
-              }
-            }
-          }
-          env {
-            name = "DB_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "password"
-              }
-            }
-          }
-          env {
-            name = "DB_NAME"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "dbname"
-              }
-            }
-          }
-          env {
-            name = "AWS_ACCESS_KEY_ID"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "aws_access_key_id"
-              }
-            }
-          }
-          env {
-            name = "AWS_SECRET_ACCESS_KEY"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "aws_secret_access_key"
-              }
-            }
-          }
-          env {
-            name = "S3_BUCKET_NAME"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.db_credentials.metadata[0].name
-                key  = "s3_bucket_name"
-              }
-            }
-          }
-          env {
-            name  = "AUTH_SERVICE_URL"
-            value = "http://auth-service:8080"
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/healthz/ready"
-              port = 8080
-            }
-            initial_delay_seconds = 5
-            period_seconds        = 10
-            failure_threshold     = 3
-            success_threshold     = 1
-            timeout_seconds       = 3
-          }
-        }
-      }
-    }
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
   }
 }
 
-resource "kubernetes_service" "core" {
-  metadata {
-    name = "core-service"
-  }
-
-  spec {
-    selector = { app = "core-service" }
-
-    port {
-      port        = 8080
-      target_port = 8080
-      node_port   = 30081
-    }
-
-    type = "NodePort"
-  }
-}
-
-resource "kubernetes_horizontal_pod_autoscaler" "core" {
-  metadata {
-    name = "core-service-hpa"
-  }
-
-  spec {
-    scale_target_ref {
-      api_version = "apps/v1"
-      kind        = "Deployment"
-      name        = kubernetes_deployment.core.metadata[0].name
-    }
-
-    min_replicas                      = 1
-    max_replicas                      = 5
-    target_cpu_utilization_percentage = 70
-  }
+resource "google_cloud_run_v2_service_iam_member" "core_public" {
+  name     = google_cloud_run_v2_service.core.name
+  location = var.gcp_region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # ─── Frontend ──────────────────────────────────────────────────────────────────
-resource "kubernetes_deployment" "frontend" {
-  metadata {
-    name   = "cloud-frontend"
-    labels = { app = "cloud-frontend" }
+resource "google_cloud_run_v2_service" "frontend" {
+  name     = "cloud-frontend"
+  location = var.gcp_region
+
+  template {
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    containers {
+      image = local.front_image
+
+      env { name = "AUTH_URL";  value = google_cloud_run_v2_service.auth.uri }
+      env { name = "CORE_URL";  value = google_cloud_run_v2_service.core.uri }
+    }
   }
 
-  spec {
-    replicas = 1
+  traffic {
+    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    percent = 100
+  }
 
-    selector {
-      match_labels = { app = "cloud-frontend" }
-    }
-
-    template {
-      metadata {
-        labels = { app = "cloud-frontend" }
-      }
-
-      spec {
-        container {
-          name              = "nginx"
-          image             = "cloud-front:latest"
-          image_pull_policy = "Never"
-
-          port {
-            container_port = 8080
-          }
-
-          env {
-            name  = "CORE_URL"
-            value = "http://192.168.49.2:30081"
-          }
-          env {
-            name  = "AUTH_URL"
-            value = "http://192.168.49.2:30082"
-          }
-        }
-      }
-    }
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
   }
 }
 
-# ─── Monitoring : Prometheus ───────────────────────────────────────────────────
-resource "kubernetes_config_map" "prometheus_config" {
-  metadata {
-    name = "prometheus-config"
+resource "google_cloud_run_v2_service_iam_member" "frontend_public" {
+  name     = google_cloud_run_v2_service.frontend.name
+  location = var.gcp_region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# ─── Monitoring (Grafana Alloy) ────────────────────────────────────────────────
+resource "google_cloud_run_v2_service" "monitoring" {
+  name     = "monitoring"
+  location = var.gcp_region
+
+  template {
+    scaling {
+      min_instance_count = 1
+      max_instance_count = 1
+    }
+
+    containers {
+      image = local.alloy_image
+
+      env { name = "AUTH_SERVICE_HOST";      value = trimprefix(google_cloud_run_v2_service.auth.uri, "https://") }
+      env { name = "CORE_SERVICE_HOST";      value = trimprefix(google_cloud_run_v2_service.core.uri, "https://") }
+      env { name = "GRAFANA_CLOUD_PROM_URL"; value = var.grafana_cloud_prom_url }
+      env { name = "GRAFANA_CLOUD_USER";     value = var.grafana_cloud_user }
+      env { name = "GRAFANA_CLOUD_PASSWORD"; value = var.grafana_cloud_password }
+    }
   }
 
-  data = {
-    "prometheus.yml" = <<-YAML
-      global:
-        scrape_interval: 15s
+  traffic {
+    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    percent = 100
+  }
 
-      scrape_configs:
-        - job_name: auth-service
-          static_configs:
-            - targets: ["auth-service:8080"]
-
-        - job_name: core-service
-          static_configs:
-            - targets: ["core-service:8080"]
-    YAML
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
   }
 }
 
-resource "kubernetes_deployment" "prometheus" {
-  metadata {
-    name   = "prometheus"
-    labels = { app = "prometheus" }
-  }
-
-  spec {
-    replicas = 1
-
-    selector {
-      match_labels = { app = "prometheus" }
-    }
-
-    template {
-      metadata {
-        labels = { app = "prometheus" }
-      }
-
-      spec {
-        container {
-          name  = "prometheus"
-          image = "prom/prometheus:v2.53.0"
-
-          args = [
-            "--config.file=/etc/prometheus/prometheus.yml",
-            "--storage.tsdb.path=/prometheus",
-          ]
-
-          port {
-            container_port = 9090
-          }
-
-          volume_mount {
-            name       = "config"
-            mount_path = "/etc/prometheus"
-          }
-        }
-
-        volume {
-          name = "config"
-          config_map {
-            name = kubernetes_config_map.prometheus_config.metadata[0].name
-          }
-        }
-      }
-    }
-  }
-}
-
-resource "kubernetes_service" "prometheus" {
-  metadata {
-    name = "prometheus"
-  }
-
-  spec {
-    selector = { app = "prometheus" }
-
-    port {
-      port        = 9090
-      target_port = 9090
-      node_port   = 30090
-    }
-
-    type = "NodePort"
-  }
-}
-
-# ─── Frontend ──────────────────────────────────────────────────────────────────
-resource "kubernetes_service" "frontend" {
-  metadata {
-    name = "cloud-frontend-service"
-  }
-
-  spec {
-    selector = { app = "cloud-frontend" }
-
-    port {
-      port        = 8080
-      target_port = 8080
-      node_port   = 30080
-    }
-
-    type = "NodePort"
-  }
+resource "google_cloud_run_v2_service_iam_member" "monitoring_public" {
+  name     = google_cloud_run_v2_service.monitoring.name
+  location = var.gcp_region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }

@@ -1,12 +1,13 @@
 terraform {
   required_providers {
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
     }
   }
 }
 
-provider "kubernetes" {
-  config_path = "~/.kube/config"
+provider "google" {
+  project = var.gcp_project_id
+  region  = var.gcp_region
 }
