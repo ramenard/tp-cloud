@@ -1,0 +1,42 @@
+name: Monitoring CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "monitoring/**"
+      - ".github/workflows/monitoring.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy — monitoring
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: gcp-auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+      - name: Build and push
+        run: |
+          IMAGE=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/tp-cloud/monitoring:${{ github.sha }}
+          docker build -t $IMAGE ./monitoring
+          docker push $IMAGE
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy monitoring \
+            --image europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/tp-cloud/monitoring:${{ github.sha }} \
+            --region ${{ secrets.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances=1 \
+            --set-env-vars "AUTH_SERVICE_HOST=${{ secrets.AUTH_SERVICE_HOST }},CORE_SERVICE_HOST=${{ secrets.CORE_SERVICE_HOST }},GRAFANA_CLOUD_PROM_URL=${{ secrets.GRAFANA_CLOUD_PROM_URL }},GRAFANA_CLOUD_USER=${{ secrets.GRAFANA_CLOUD_USER }},GRAFANA_CLOUD_PASSWORD=${{ secrets.GRAFANA_CLOUD_PASSWORD }}"
