@@ -49,7 +49,7 @@ resource "google_cloud_run_v2_service" "auth" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
     percent = 100
   }
 
@@ -123,7 +123,7 @@ resource "google_cloud_run_v2_service" "core" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
     percent = 100
   }
 
@@ -165,7 +165,7 @@ resource "google_cloud_run_v2_service" "frontend" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
     percent = 100
   }
 
@@ -219,7 +219,7 @@ resource "google_cloud_run_v2_service" "monitoring" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_TYPE_LATEST"
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
     percent = 100
   }
 
