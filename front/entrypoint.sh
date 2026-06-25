@@ -1,10 +1,11 @@
 #!/bin/sh
-# Remplace le placeholder BACKEND_URL dans le HTML par la vraie valeur de l'env
-BACKEND="${BACKEND_URL:-}"
-sed -i "s|window.BACKEND_URL \|\| \"\"|window.BACKEND_URL \|\| \"${BACKEND}\"|g" /usr/share/nginx/html/index.html
+CORE="${CORE_URL:-}"
+AUTH="${AUTH_URL:-}"
 
-# Nginx écoute sur le port défini par Cloud Run (défaut 8080)
+sed -i "s|window.CORE_URL || \"\"|window.CORE_URL || \"${CORE}\"|g" /usr/share/nginx/html/index.html
+sed -i "s|window.AUTH_URL || \"\"|window.AUTH_URL || \"${AUTH}\"|g" /usr/share/nginx/html/index.html
+
 PORT="${PORT:-8080}"
-sed -i "s/listen\s*80;/listen ${PORT};/g" /etc/nginx/conf.d/default.conf
+sed -i "s/listen\s*8080;/listen ${PORT};/g" /etc/nginx/conf.d/default.conf
 
 exec nginx -g "daemon off;"

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Upload de fichiers</title>
+  <title>Cloud App</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -15,137 +15,285 @@
       background: #f0f2f5;
       gap: 1.5rem;
     }
-    h1 { font-size: 1.8rem; color: #333; }
+
+    /* ── Auth view ── */
+    #auth-view { width: 360px; background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    #auth-view h1 { font-size: 1.5rem; color: #333; margin-bottom: 1.5rem; text-align: center; }
+    .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid #e0e0e0; }
+    .tab {
+      flex: 1; padding: 0.6rem; text-align: center; cursor: pointer;
+      font-weight: 600; color: #888; border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab.active { color: #4a90e2; border-bottom-color: #4a90e2; }
+    .form-group { display: flex; flex-direction: column; gap: 0.8rem; }
+    .form-group input {
+      padding: 0.7rem 1rem; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: #4a90e2; }
+    .btn-primary {
+      width: 100%; padding: 0.75rem; background: #4a90e2; color: #fff;
+      border: none; border-radius: 8px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #357abd; }
+    #auth-error { color: #842029; font-size: 0.85rem; text-align: center; min-height: 1.2rem; }
+
+    /* ── App view ── */
+    #app-view { width: 440px; display: flex; flex-direction: column; gap: 1.5rem; }
+    .app-header {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #fff; border-radius: 12px; padding: 1rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .app-header h1 { font-size: 1.3rem; color: #333; }
+    .app-header .user { font-size: 0.85rem; color: #666; }
+    .btn-logout {
+      padding: 0.4rem 0.9rem; background: #f8d7da; color: #842029;
+      border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-logout:hover { background: #f5c2c7; }
     #drop-zone {
-      width: 400px;
-      padding: 3rem 2rem;
-      border: 3px dashed #4a90e2;
-      border-radius: 12px;
-      background: #fff;
-      text-align: center;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-      color: #555;
+      padding: 2.5rem 2rem; border: 3px dashed #4a90e2; border-radius: 12px;
+      background: #fff; text-align: center; cursor: pointer;
+      transition: background 0.2s, border-color 0.2s; color: #555;
     }
-    #drop-zone.dragover {
-      background: #e8f0fe;
-      border-color: #1a73e8;
-    }
-    #drop-zone p { font-size: 1rem; margin-bottom: 0.5rem; }
+    #drop-zone.dragover { background: #e8f0fe; border-color: #1a73e8; }
+    #drop-zone p { font-size: 1rem; margin-bottom: 0.4rem; }
     #drop-zone span { font-size: 0.85rem; color: #888; }
     #file-input { display: none; }
-    #status {
-      width: 400px;
-      font-size: 0.95rem;
-      color: #444;
-      min-height: 1.5rem;
-      text-align: center;
-    }
-    #file-list {
-      width: 400px;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
+    #upload-status { font-size: 0.9rem; color: #444; text-align: center; min-height: 1.2rem; }
+
+    /* ── File list ── */
+    #file-list-section h2 { font-size: 1rem; color: #555; margin-bottom: 0.6rem; }
+    #file-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; }
     .file-item {
-      background: #fff;
-      border-radius: 8px;
-      padding: 0.6rem 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: #fff; border-radius: 8px; padding: 0.6rem 1rem;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.88rem; box-shadow: 0 1px 3px rgba(0,0,0,0.07);
     }
-    .file-item .name { color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
-    .file-item .badge {
-      padding: 0.2rem 0.6rem;
-      border-radius: 99px;
-      font-size: 0.75rem;
-      font-weight: 600;
+    .file-item .name { color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+    .file-item .meta { color: #888; font-size: 0.78rem; text-align: right; }
+    .badge {
+      padding: 0.2rem 0.6rem; border-radius: 99px;
+      font-size: 0.75rem; font-weight: 600;
     }
     .badge.uploading { background: #fff3cd; color: #856404; }
     .badge.success   { background: #d1e7dd; color: #0f5132; }
     .badge.error     { background: #f8d7da; color: #842029; }
+    .empty { color: #aaa; font-size: 0.9rem; text-align: center; padding: 1rem; }
   </style>
 </head>
 <body>
-  <h1>Upload vers S3</h1>
 
-  <div id="drop-zone">
-    <p>Glissez vos fichiers ici</p>
-    <span>ou cliquez pour parcourir</span>
-    <input type="file" id="file-input" multiple />
+  <!-- ── Vue authentification ── -->
+  <div id="auth-view">
+    <h1>Cloud App</h1>
+    <div class="tabs">
+      <div class="tab active" data-tab="login">Connexion</div>
+      <div class="tab" data-tab="register">Inscription</div>
+    </div>
+
+    <div id="tab-login" class="form-group">
+      <input type="text"     id="login-username" placeholder="Nom d'utilisateur" />
+      <input type="password" id="login-password" placeholder="Mot de passe" />
+      <button class="btn-primary" onclick="doLogin()">Se connecter</button>
+    </div>
+
+    <div id="tab-register" class="form-group" style="display:none">
+      <input type="text"     id="reg-username" placeholder="Nom d'utilisateur" />
+      <input type="password" id="reg-password" placeholder="Mot de passe" />
+      <button class="btn-primary" onclick="doRegister()">S'inscrire</button>
+    </div>
+
+    <div id="auth-error"></div>
   </div>
 
-  <div id="status"></div>
-  <div id="file-list"></div>
+  <!-- ── Vue application (cachée par défaut) ── -->
+  <div id="app-view" style="display:none">
+    <div class="app-header">
+      <div>
+        <h1>Upload vers S3</h1>
+        <span class="user">Connecté en tant que <strong id="username-label"></strong></span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
+    </div>
+
+    <div id="drop-zone">
+      <p>Glissez vos fichiers ici</p>
+      <span>ou cliquez pour parcourir</span>
+      <input type="file" id="file-input" multiple />
+    </div>
+
+    <div id="upload-status"></div>
+
+    <div id="file-list-section">
+      <h2>Fichiers uploadés</h2>
+      <div id="file-list"></div>
+    </div>
+  </div>
 
   <script>
-    const BACKEND_URL = window.BACKEND_URL || "";
+    const CORE_URL = window.CORE_URL || "";
+    const AUTH_URL = window.AUTH_URL || "";
+
+    // ── État ──────────────────────────────────────────────────────────────────
+
+    let token    = localStorage.getItem("token");
+    let username = localStorage.getItem("username");
+
+    if (token) showApp();
+
+    // ── Onglets login / register ──────────────────────────────────────────────
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("tab-login").style.display    = tab.dataset.tab === "login"    ? "flex" : "none";
+        document.getElementById("tab-register").style.display = tab.dataset.tab === "register" ? "flex" : "none";
+        setAuthError("");
+      });
+    });
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    function setAuthError(msg) {
+      document.getElementById("auth-error").textContent = msg;
+    }
+
+    async function doLogin() {
+      const u = document.getElementById("login-username").value.trim();
+      const p = document.getElementById("login-password").value;
+      if (!u || !p) { setAuthError("Remplissez tous les champs."); return; }
+
+      try {
+        const res  = await fetch(`${AUTH_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setAuthError(data.detail || "Identifiants incorrects"); return; }
+        saveSession(u, data.access_token);
+        showApp();
+      } catch {
+        setAuthError("Impossible de joindre le service d'authentification.");
+      }
+    }
+
+    async function doRegister() {
+      const u = document.getElementById("reg-username").value.trim();
+      const p = document.getElementById("reg-password").value;
+      if (!u || !p) { setAuthError("Remplissez tous les champs."); return; }
+
+      try {
+        const res  = await fetch(`${AUTH_URL}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setAuthError(data.detail || "Erreur lors de l'inscription"); return; }
+        setAuthError("Compte créé ! Vous pouvez vous connecter.");
+        document.querySelector("[data-tab='login']").click();
+      } catch {
+        setAuthError("Impossible de joindre le service d'authentification.");
+      }
+    }
+
+    function doLogout() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("username");
+      token = null; username = null;
+      document.getElementById("app-view").style.display  = "none";
+      document.getElementById("auth-view").style.display = "flex";
+      document.getElementById("file-list").innerHTML = "";
+    }
+
+    function saveSession(u, t) {
+      token = t; username = u;
+      localStorage.setItem("token",    t);
+      localStorage.setItem("username", u);
+    }
+
+    // ── Vues ──────────────────────────────────────────────────────────────────
+
+    function showApp() {
+      document.getElementById("auth-view").style.display = "none";
+      document.getElementById("app-view").style.display  = "flex";
+      document.getElementById("username-label").textContent = username;
+      loadFiles();
+    }
+
+    // ── Upload ────────────────────────────────────────────────────────────────
 
     const dropZone  = document.getElementById("drop-zone");
     const fileInput = document.getElementById("file-input");
-    const status    = document.getElementById("status");
-    const fileList  = document.getElementById("file-list");
+    const uploadStatus = document.getElementById("upload-status");
 
     dropZone.addEventListener("click", () => fileInput.click());
-
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      dropZone.classList.add("dragover");
-    });
-
+    dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("dragover"); });
     dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-
     dropZone.addEventListener("drop", e => {
       e.preventDefault();
       dropZone.classList.remove("dragover");
       uploadFiles(e.dataTransfer.files);
     });
-
     fileInput.addEventListener("change", () => uploadFiles(fileInput.files));
 
     async function uploadFiles(files) {
       if (!files.length) return;
-      status.textContent = `${files.length} fichier(s) en cours d'envoi…`;
-
-      const uploads = Array.from(files).map(file => uploadOne(file));
-      await Promise.all(uploads);
-      status.textContent = "Tous les envois sont terminés.";
+      uploadStatus.textContent = `${files.length} fichier(s) en cours d'envoi…`;
+      await Promise.all(Array.from(files).map(uploadOne));
+      uploadStatus.textContent = "Tous les envois sont terminés.";
       fileInput.value = "";
+      loadFiles();
     }
 
     async function uploadOne(file) {
-      const item = addItem(file.name, "uploading", "Envoi…");
       const form = new FormData();
       form.append("file", file);
-
       try {
-        const res = await fetch(`${BACKEND_URL}/upload`, { method: "POST", body: form });
-        const data = await res.json();
-        if (res.ok) {
-          setBadge(item, "success", "Envoyé ✓");
-        } else {
-          setBadge(item, "error", data.detail || "Erreur");
+        const res = await fetch(`${CORE_URL}/upload`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` },
+          body: form,
+        });
+        if (res.status === 401) { doLogout(); return; }
+      } catch { /* réseau KO */ }
+    }
+
+    // ── Liste des fichiers ────────────────────────────────────────────────────
+
+    async function loadFiles() {
+      const list = document.getElementById("file-list");
+      list.innerHTML = "";
+      try {
+        const res = await fetch(`${CORE_URL}/files`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (res.status === 401) { doLogout(); return; }
+        const files = await res.json();
+        if (!files.length) {
+          list.innerHTML = '<div class="empty">Aucun fichier uploadé.</div>';
+          return;
         }
-      } catch (err) {
-        setBadge(item, "error", "Réseau KO");
+        files.forEach(f => {
+          const date = new Date(f.uploaded_at).toLocaleString("fr-FR");
+          const div  = document.createElement("div");
+          div.className = "file-item";
+          div.innerHTML = `
+            <span class="name" title="${f.filename}">${f.filename}</span>
+            <span class="meta">${f.uploaded_by}<br>${date}</span>
+          `;
+          list.appendChild(div);
+        });
+      } catch {
+        list.innerHTML = '<div class="empty">Impossible de charger les fichiers.</div>';
       }
-    }
-
-    function addItem(name, badgeClass, badgeText) {
-      const div = document.createElement("div");
-      div.className = "file-item";
-      div.innerHTML = `<span class="name" title="${name}">${name}</span><span class="badge ${badgeClass}">${badgeText}</span>`;
-      fileList.prepend(div);
-      return div;
-    }
-
-    function setBadge(item, badgeClass, text) {
-      const badge = item.querySelector(".badge");
-      badge.className = `badge ${badgeClass}`;
-      badge.textContent = text;
     }
   </script>
 </body>

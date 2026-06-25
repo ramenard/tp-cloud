@@ -326,8 +326,12 @@ resource "kubernetes_deployment" "frontend" {
           }
 
           env {
-            name  = "BACKEND_URL"
+            name  = "CORE_URL"
             value = "http://192.168.49.2:30081"
+          }
+          env {
+            name  = "AUTH_URL"
+            value = "http://192.168.49.2:30082"
           }
         }
       }
