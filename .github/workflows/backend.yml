@@ -70,7 +70,16 @@ jobs:
     if: github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        service: [auth, core]
+        include:
+          - service: auth
+            env_vars: ""
+          - service: core
+            env_vars: >-
+              AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }},
+              AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},
+              S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }},
+              AWS_REGION=${{ secrets.AWS_REGION }},
+              AUTH_SERVICE_URL=${{ secrets.AUTH_SERVICE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,8 +101,13 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
+          EXTRA=""
+          if [ -n "${{ matrix.env_vars }}" ]; then
+            EXTRA="--set-env-vars ${{ matrix.env_vars }}"
+          fi
           gcloud run deploy ${{ matrix.service }}-service \
             --image europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/tp-cloud/${{ matrix.service }}-service:${{ github.sha }} \
             --region ${{ secrets.GCP_REGION }} \
             --platform managed \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            $EXTRA
