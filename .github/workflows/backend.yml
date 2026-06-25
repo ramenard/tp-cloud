@@ -90,11 +90,10 @@ jobs:
           docker build -t $IMAGE ./services/${{ matrix.service }}
           docker push $IMAGE
 
-      - name: Update Kubernetes deployment
+      - name: Deploy to Cloud Run
         run: |
-          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER }} \
-            --region ${{ secrets.GKE_REGION }} \
-            --project ${{ secrets.GCP_PROJECT_ID }}
-          kubectl set image deployment/${{ matrix.service }}-service \
-            api=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/tp-cloud/${{ matrix.service }}-service:${{ github.sha }}
-          kubectl rollout status deployment/${{ matrix.service }}-service --timeout=120s
+          gcloud run deploy ${{ matrix.service }}-service \
+            --image europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/tp-cloud/${{ matrix.service }}-service:${{ github.sha }} \
+            --region ${{ secrets.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated
